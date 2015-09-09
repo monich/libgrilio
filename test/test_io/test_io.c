@@ -162,12 +162,12 @@ test_connected_destroy(
 }
 
 /*==========================================================================*
- * BasebandVersion
+ * Basic
  *==========================================================================*/
 
 static
 void
-test_baseband_version_response(
+test_basic_response(
     GRilIoChannel* channel,
     int status,
     const void* data,
@@ -197,7 +197,7 @@ test_baseband_version_response(
 
 static
 guint
-test_baseband_version_request(
+test_basic_request(
     Test* test,
     GRilIoChannelResponseFunc response)
 {
@@ -207,7 +207,7 @@ test_baseband_version_request(
 
 static
 gboolean
-test_baseband_version_response_ok(
+test_basic_response_ok(
     GRilIoTestServer* server,
     const char* data,
     guint id)
@@ -224,12 +224,12 @@ test_baseband_version_response_ok(
 
 static
 gboolean
-test_baseband_version_init(
+test_basic_init(
     Test* test)
 {
     grilio_test_server_set_chunk(test->server, 5);
-    return test_baseband_version_response_ok(test->server, "UNIT_TEST",
-        test_baseband_version_request(test, test_baseband_version_response));
+    return test_basic_response_ok(test->server, "UNIT_TEST",
+        test_basic_request(test, test_basic_response));
 }
 
 /*==========================================================================*
@@ -315,9 +315,8 @@ test_queue_first_response(
         grilio_queue_cancel_all(queue->queue[1], TRUE);
         grilio_queue_cancel_request(queue->queue[0], queue->cancel_id, TRUE);
         /* This one will stop the event loop */
-        test_baseband_version_response_ok(queue->test.server, "TEST",
-            test_baseband_version_request(&queue->test,
-                test_queue_last_response));
+        test_basic_response_ok(queue->test.server, "TEST",
+            test_basic_request(&queue->test, test_queue_last_response));
 
         /* This will deallocate the queue, cancelling all the requests in
          * the process. Callbacks won't be notified. Extra ref just improves
@@ -368,7 +367,7 @@ test_queue_init(
         RIL_REQUEST_BASEBAND_VERSION);
 
     /* This one will succeed */
-    test_baseband_version_response_ok(test->server, "QUEUE_TEST",
+    test_basic_response_ok(test->server, "QUEUE_TEST",
         grilio_queue_send_request_full(queue->queue[0], NULL,
             RIL_REQUEST_BASEBAND_VERSION, test_queue_first_response,
             NULL, test));
@@ -376,7 +375,7 @@ test_queue_init(
     /* This one from queue 0 will be cancelled too */
     queue->cancel_id = grilio_queue_send_request_full(queue->queue[0], NULL,
         RIL_REQUEST_BASEBAND_VERSION, test_queue_response, NULL, test);
-    test_baseband_version_response_ok(test->server, "CANCEL", queue->cancel_id);
+    test_basic_response_ok(test->server, "CANCEL", queue->cancel_id);
     return TRUE;
 }
 
@@ -525,13 +524,13 @@ test_logger_init(
     test->log = grilio_channel_add_default_logger(test->io, GLOG_LEVEL_ALWAYS);
     log->test_log = grilio_channel_add_logger(test->io, test_logger_cb, log);
 
-    id[0] = test_baseband_version_request(test, test_logger_response);
-    id[1] = test_baseband_version_request(test, test_logger_response);
-    id[2] = test_baseband_version_request(test, test_logger_response);
+    id[0] = test_basic_request(test, test_logger_response);
+    id[1] = test_basic_request(test, test_logger_response);
+    id[2] = test_basic_request(test, test_logger_response);
     grilio_channel_cancel_request(test->io, id[0], TRUE);
     grilio_channel_cancel_request(test->io, id[1], FALSE);
     return id[0] && id[1] && id[2] &&
-        test_baseband_version_response_ok(test->server, "LOGTEST", id[2]);
+        test_basic_response_ok(test->server, "LOGTEST", id[2]);
 }
 
 static
@@ -541,6 +540,92 @@ test_logger_destroy(
 {
     TestLogger* log = G_CAST(test, TestLogger, test);
     grilio_channel_remove_logger(test->io, log->test_log);
+}
+
+/*==========================================================================*
+ * Timeout
+ *==========================================================================*/
+
+typedef struct test_timeout {
+    Test test;
+    int timeout_count;
+    int cancel_count;
+    guint req_id;
+    guint timer_id;
+} TestTimeout;
+
+
+static
+gboolean
+test_timeout_done(
+    gpointer user_data)
+{
+    Test* test = user_data;
+    TestTimeout* timeout = G_CAST(test, TestTimeout, test);
+    timeout->timer_id = 0;
+    GDEBUG("Cancelling request %u", timeout->req_id);
+    if (grilio_channel_cancel_request(test->io, timeout->req_id, TRUE) &&
+        timeout->timeout_count == 1) {
+        test->ret = RET_OK;
+        g_main_loop_quit(test->loop);
+    }
+    return FALSE;
+}
+
+static
+void
+test_timeout_response(
+    GRilIoChannel* channel,
+    int status,
+    const void* data,
+    guint len,
+    void* user_data)
+{
+    Test* test = user_data;
+    TestTimeout* timeout = G_CAST(test, TestTimeout, test);
+    GDEBUG("Completion status %d", status);
+    switch (status) {
+    case GRILIO_STATUS_TIMEOUT:
+        timeout->timeout_count++;
+        if (!timeout->timer_id) {
+            timeout->timer_id = g_timeout_add(200, test_timeout_done, test);
+        }
+        break;
+    case GRILIO_STATUS_CANCELLED:
+        timeout->cancel_count++;
+        break;
+    default:
+        break;
+    }
+}
+
+static
+gboolean
+test_timeout_init(
+    Test* test)
+{
+    TestTimeout* timeout = G_CAST(test, TestTimeout, test);
+    GRilIoRequest* req1 = grilio_request_new();
+    GRilIoRequest* req2 = grilio_request_new();
+    grilio_channel_set_timeout(test->io, 10);
+    grilio_request_set_timeout(req2, GRILIO_TIMEOUT_NONE);
+
+    grilio_channel_send_request_full(test->io, req1,
+        RIL_REQUEST_BASEBAND_VERSION, test_timeout_response, NULL, test);
+    timeout->req_id = grilio_channel_send_request_full(test->io, req2,
+        RIL_REQUEST_BASEBAND_VERSION, test_timeout_response, NULL, test);
+    grilio_request_unref(req1);
+    grilio_request_unref(req2);
+    return TRUE;
+}
+
+static
+void
+test_timeout_destroy(
+    Test* test)
+{
+    TestTimeout* timeout = G_CAST(test, TestTimeout, test);
+    if (timeout->timer_id) g_source_remove(timeout->timer_id);
 }
 
 /*==========================================================================*
@@ -555,9 +640,9 @@ static const TestDesc all_tests[] = {
         test_connected_check,
         test_connected_destroy
     },{
-        "BasebandVersion",
+        "Basic",
         sizeof(Test),
-        test_baseband_version_init,
+        test_basic_init,
         NULL,
         NULL
     },{
@@ -584,6 +669,12 @@ static const TestDesc all_tests[] = {
         test_logger_init,
         NULL,
         test_logger_destroy
+    },{
+        "Timeout",
+        sizeof(TestTimeout),
+        test_timeout_init,
+        NULL,
+        test_timeout_destroy
     }
 };
 

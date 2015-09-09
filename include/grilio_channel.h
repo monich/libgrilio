@@ -120,6 +120,11 @@ grilio_channel_unref(
     GRilIoChannel* channel);
 
 void
+grilio_channel_set_timeout(
+    GRilIoChannel* channel,
+    int milliseconds);
+
+void
 grilio_channel_set_name(
     GRilIoChannel* channel,
     const char* name);

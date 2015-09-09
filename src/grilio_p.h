@@ -54,8 +54,10 @@
 
 struct grilio_request {
     int refcount;
+    int timeout;
     guint32 code;
     guint id;
+    gint64 deadline;
     GRILIO_REQUEST_STATUS status;
     GByteArray* bytes;
     GRilIoRequest* next;

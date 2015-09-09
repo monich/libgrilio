@@ -52,6 +52,9 @@ typedef enum grilio_packet_type {
     GRILIO_PACKET_UNSOL
 } GRILIO_PACKET_TYPE;
 
+#define GRILIO_TIMEOUT_NONE     (0)     /* Infinite timeout */
+#define GRILIO_TIMEOUT_DEFAULT  (-1)
+
 G_END_DECLS
 
 #endif /* GRILIO_TYPES_H */

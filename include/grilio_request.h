@@ -62,6 +62,11 @@ void
 grilio_request_unref(
     GRilIoRequest* request);
 
+void
+grilio_request_set_timeout(
+    GRilIoRequest* request,
+    int milliseconds);
+
 GRILIO_REQUEST_STATUS
 grilio_request_status(
     GRilIoRequest* request);
