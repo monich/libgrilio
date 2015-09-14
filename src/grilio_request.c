@@ -197,7 +197,7 @@ grilio_request_append_utf8_chars(
                 if (utf16) {
                     len = utf16_len;
                     padded_len = G_ALIGN4((len+1)*2);
-                    memcpy(utf16_ptr, utf16, len * 2);
+                    memcpy(utf16_ptr, utf16, (len+1)*2);
                     g_free(utf16);
                 }
             }
@@ -206,7 +206,9 @@ grilio_request_append_utf8_chars(
             *len_ptr = GUINT32_TO_RIL(len);
 
             /* Zero padding */
-            memset(utf16_ptr + len, -1, padded_len - len*2);
+            if (padded_len - (len + 1)*2) {
+                memset(utf16_ptr + (len + 1), 0, padded_len - (len + 1)*2);
+            }
 
             /* Correct the packet size if necessaary */
             g_byte_array_set_size(req->bytes, old_size + padded_len + 4);

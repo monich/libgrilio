@@ -42,6 +42,12 @@
 #define RIL_REQUEST_BASEBAND_VERSION 51
 #define RIL_UNSOL_RIL_CONNECTED 1034
 
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+#  define UNICHAR2(c) c, 0
+#elif G_BYTE_ORDER == G_BIG_ENDIAN
+#  define UNICHAR2(c) 0, c
+#endif
+
 typedef struct test_desc {
     const char* name;
     int (*run)();
@@ -150,12 +156,33 @@ static
 int
 test_strings()
 {
-    int ret = RET_ERR;
-    guint i;
     static const char* test_string[] = { NULL, "", "1", "12", "123", "1234" };
+    static const guchar valid_data[] = {
+        /* NULL */
+        0xff, 0xff, 0xff, 0xff,
+        /* "" */
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xff, 0xff,
+        /* "1" */
+        0x01, 0x00, 0x00, 0x00,
+        UNICHAR2('1'), 0x00, 0x00,
+        /* "12" */
+        0x02, 0x00, 0x00, 0x00,
+        UNICHAR2('1'), UNICHAR2('2'), 0x00, 0x00, 0x00, 0x00,
+        /* "123" */
+        0x03, 0x00, 0x00, 0x00,
+        UNICHAR2('1'), UNICHAR2('2'), UNICHAR2('3'), 0x00, 0x00,
+        /* "1234" */
+        0x04, 0x00,0x00, 0x00,
+        UNICHAR2('1'), UNICHAR2('2'), UNICHAR2('3'), UNICHAR2('4'),
+        0x00, 0x00, 0x00, 0x00
+    };
+
+    int ret = RET_ERR;
     char* decoded[G_N_ELEMENTS(test_string)];
     GRilIoRequest* req = grilio_request_new();
     GRilIoParser parser;
+    guint i;
 
     for (i=0; i<G_N_ELEMENTS(test_string); i++) {
         grilio_request_append_utf8_chars(req, test_string[i], -1);
@@ -171,7 +198,11 @@ test_strings()
 
     /* Decode */
     GASSERT(grilio_parser_at_end(&parser));
-    if (grilio_parser_at_end(&parser)) {
+    GASSERT(grilio_request_size(req) == sizeof(valid_data));
+    GASSERT(!memcmp(valid_data, grilio_request_data(req), sizeof(valid_data)));
+    if (grilio_parser_at_end(&parser) &&
+        grilio_request_size(req) == sizeof(valid_data) &&
+        !memcmp(valid_data, grilio_request_data(req), sizeof(valid_data))) {
         ret = RET_OK;
 
         for (i=0; i<G_N_ELEMENTS(test_string); i++) {
