@@ -32,12 +32,12 @@ make KEEP_SYMBOLS=1 release pkgconfig
 rm -rf %{buildroot}
 make install-dev DESTDIR=%{buildroot}
 
+%check
+make -C test test
+
 %post -p /sbin/ldconfig
 
 %postun -p /sbin/ldconfig
-
-%check
-make -C test test
 
 %files
 %defattr(-,root,root,-)

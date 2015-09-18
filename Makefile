@@ -55,6 +55,10 @@ SPEC_DIR = spec
 DEBUG_BUILD_DIR = $(BUILD_DIR)/debug
 RELEASE_BUILD_DIR = $(BUILD_DIR)/release
 
+#
+# Code coverage
+#
+
 ifndef GCOV
 GCOV = 0
 endif

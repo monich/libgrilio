@@ -55,7 +55,7 @@ struct grilio_channel {
 
 typedef
 void
-(*GRilIoChannelConnectedFunc)(
+(*GRilIoChannelEventFunc)(
     GRilIoChannel* channel,
     void* user_data);
 
@@ -148,7 +148,13 @@ grilio_channel_remove_logger(
 gulong
 grilio_channel_add_connected_handler(
     GRilIoChannel* channel,
-    GRilIoChannelConnectedFunc func,
+    GRilIoChannelEventFunc func,
+    void* arg);
+
+gulong
+grilio_channel_add_disconnected_handler(
+    GRilIoChannel* channel,
+    GRilIoChannelEventFunc func,
     void* arg);
 
 gulong

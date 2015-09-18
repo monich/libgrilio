@@ -398,8 +398,8 @@ test_queue_destroy(
 
 static
 void
-test_write_error_handler(
-    GRilIoChannel* channel,
+test_write_error(
+    GRilIoChannel* io,
     const GError* error,
     void* user_data)
 {
@@ -410,15 +410,51 @@ test_write_error_handler(
 }
 
 static
+void
+test_write_connected(
+    GRilIoChannel* io,
+    void* user_data)
+{
+    Test* test = user_data;
+    grilio_test_server_shutdown(test->server);
+    /* This should result in test_write_error getting invoked */
+    grilio_channel_add_error_handler(test->io, test_write_error, test);
+    grilio_channel_send_request(io, NULL, RIL_REQUEST_BASEBAND_VERSION);
+}
+
+static
 gboolean
 test_write_error_init(
     Test* test)
 {
-    grilio_channel_add_error_handler(test->io, test_write_error_handler, test);
-    grilio_channel_send_request(test->io, NULL, RIL_REQUEST_BASEBAND_VERSION);
-    grilio_test_server_shutdown(test->server);
+    grilio_channel_add_connected_handler(test->io, test_write_connected, test);
     /* grilio_channel_new_socket("/tmp" must fail */
     return !grilio_channel_new_socket("/tmp", NULL);
+}
+
+/*==========================================================================*
+ * EOF
+ *==========================================================================*/
+
+static
+void
+test_eof_handler(
+    GRilIoChannel* channel,
+    void* user_data)
+{
+    Test* test = user_data;
+    test->ret = RET_OK;
+    g_main_loop_quit(test->loop);
+}
+
+static
+gboolean
+test_eof_init(
+    Test* test)
+{
+    grilio_channel_add_disconnected_handler(test->io, test_eof_handler, test);
+    grilio_test_server_shutdown(test->server);
+    return TRUE;
 }
 
 /*==========================================================================*
@@ -655,6 +691,12 @@ static const TestDesc all_tests[] = {
         "WriteError",
         sizeof(Test),
         test_write_error_init,
+        NULL,
+        NULL
+    },{
+        "EOF",
+        sizeof(Test),
+        test_eof_init,
         NULL,
         NULL
     },{

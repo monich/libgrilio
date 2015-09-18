@@ -92,12 +92,14 @@ enum grilio_channel_signal {
     SIGNAL_CONNECTED,
     SIGNAL_UNSOL_EVENT,
     SIGNAL_ERROR,
+    SIGNAL_EOF,
     SIGNAL_COUNT
 };
 
-#define SIGNAL_CONNECTED_NAME   "connected"
-#define SIGNAL_UNSOL_EVENT_NAME "unsol-event"
-#define SIGNAL_ERROR_NAME       "error"
+#define SIGNAL_CONNECTED_NAME   "grilio-connected"
+#define SIGNAL_UNSOL_EVENT_NAME "grilio-unsol-event"
+#define SIGNAL_ERROR_NAME       "grilio-error"
+#define SIGNAL_EOF_NAME         "grilio-eof"
 
 #define SIGNAL_UNSOL_EVENT_DETAIL_FORMAT        "%x"
 #define SIGNAL_UNSOL_EVENT_DETAIL_MAX_LENGTH    (8)
@@ -205,6 +207,16 @@ grilio_channel_handle_error(
     grilio_channel_shutdown(self, FALSE);
     g_signal_emit(self, grilio_channel_signals[SIGNAL_ERROR], 0, error);
     g_error_free(error);
+}
+
+static
+void
+grilio_channel_handle_eof(
+    GRilIoChannel* self)
+{
+    GERR("%s hangup", self->name);
+    grilio_channel_shutdown(self, FALSE);
+    g_signal_emit(self, grilio_channel_signals[SIGNAL_EOF], 0);
 }
 
 static
@@ -494,21 +506,39 @@ grilio_channel_handle_packet(
 
 static
 gboolean
+grilio_channel_read_chars(
+    GRilIoChannel* self,
+    gchar* buf,
+    gsize count,
+    gsize* bytes_read)
+{
+    GError* error = NULL;
+    GIOStatus status = g_io_channel_read_chars(self->priv->io_channel, buf,
+        count, bytes_read, &error);
+    if (error) {
+        grilio_channel_handle_error(self, GRILIO_ERROR_READ, error);
+        return FALSE;
+    } else if (status == G_IO_STATUS_EOF) {
+        grilio_channel_handle_eof(self);
+        return FALSE;
+    } else {
+        return TRUE;
+    }
+}
+
+static
+gboolean
 grilio_channel_read(
     GRilIoChannel* self)
 {
-    GError* error = NULL;
     gsize bytes_read;
     GRilIoChannelPriv* priv = self->priv;
 
     /* Length */
     if (priv->read_len_pos < 4) {
-        bytes_read = 0;
-        g_io_channel_read_chars(priv->io_channel,
+        if (!grilio_channel_read_chars(self,
             priv->read_len_buf + priv->read_len_pos,
-            4 - priv->read_len_pos, &bytes_read, &error);
-        if (error) {
-            grilio_channel_handle_error(self, GRILIO_ERROR_READ, error);
+            4 - priv->read_len_pos, &bytes_read)) {
             return FALSE;
         }
         priv->read_len_pos += bytes_read;
@@ -539,12 +569,9 @@ grilio_channel_read(
 
     /* Packet body */
     if (priv->read_buf_pos < priv->read_len) {
-        bytes_read = 0;
-        g_io_channel_read_chars(priv->io_channel,
+        if (!grilio_channel_read_chars(self,
             priv->read_buf + priv->read_buf_pos,
-            priv->read_len - priv->read_buf_pos, &bytes_read, &error);
-        if (error) {
-            grilio_channel_handle_error(self, GRILIO_ERROR_READ, error);
+            priv->read_len - priv->read_buf_pos, &bytes_read)) {
             return FALSE;
         }
         priv->read_buf_pos += bytes_read;
@@ -730,11 +757,21 @@ grilio_channel_set_name(
 gulong
 grilio_channel_add_connected_handler(
     GRilIoChannel* self,
-    GRilIoChannelConnectedFunc func,
+    GRilIoChannelEventFunc func,
     void* arg)
 {
     return (G_LIKELY(self) && G_LIKELY(func)) ? g_signal_connect(self,
         SIGNAL_CONNECTED_NAME, G_CALLBACK(func), arg) : 0;
+}
+
+gulong
+grilio_channel_add_disconnected_handler(
+    GRilIoChannel* self,
+    GRilIoChannelEventFunc func,
+    void* arg)
+{
+    return (G_LIKELY(self) && G_LIKELY(func)) ? g_signal_connect(self,
+        SIGNAL_EOF_NAME, G_CALLBACK(func), arg) : 0;
 }
 
 gulong
@@ -1112,6 +1149,9 @@ grilio_channel_class_init(
         g_signal_new(SIGNAL_ERROR_NAME, G_OBJECT_CLASS_TYPE(klass),
             G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL,
             G_TYPE_NONE, 1, G_TYPE_ERROR);
+    grilio_channel_signals[SIGNAL_EOF] =
+        g_signal_new(SIGNAL_EOF_NAME, G_OBJECT_CLASS_TYPE(klass),
+            G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
 }
 
 /*
