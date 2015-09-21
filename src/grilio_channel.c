@@ -204,6 +204,13 @@ grilio_channel_handle_error(
 {
     GERR("%s %s failed: %s", self->name, (type == GRILIO_ERROR_READ) ?
          "read" : "write", error->message);
+    /* Zero watch ids because we're going to return FALSE from the callback */
+    if (type == GRILIO_ERROR_READ) {
+        self->priv->read_watch_id = 0;
+    } else {
+        GASSERT(type == GRILIO_ERROR_WRITE);
+        self->priv->write_watch_id = 0;
+    }
     grilio_channel_shutdown(self, FALSE);
     g_signal_emit(self, grilio_channel_signals[SIGNAL_ERROR], 0, error);
     g_error_free(error);
@@ -598,8 +605,11 @@ grilio_channel_read_callback(
     gpointer data)
 {
     GRilIoChannel* self = data;
-    gboolean ok = (condition & G_IO_IN) && grilio_channel_read(self);
+    gboolean ok;
+    grilio_channel_ref(self);
+    ok = (condition & G_IO_IN) && grilio_channel_read(self);
     if (!ok) self->priv->read_watch_id = 0;
+    grilio_channel_unref(self);
     return ok;
 }
 
@@ -611,8 +621,11 @@ grilio_channel_write_callback(
     gpointer data)
 {
     GRilIoChannel* self = data;
-    gboolean ok = (condition & G_IO_OUT) && grilio_channel_write(self);
+    gboolean ok;
+    grilio_channel_ref(self);
+    ok = (condition & G_IO_OUT) && grilio_channel_write(self);
     if (!ok) self->priv->write_watch_id = 0;
+    grilio_channel_unref(self);
     return ok;
 }
 
