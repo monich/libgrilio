@@ -33,7 +33,7 @@
 #ifndef GRILIO_TYPES_H
 #define GRILIO_TYPES_H
 
-#include <glibutil/gutil_types.h>
+#include <gutil_types.h>
 
 G_BEGIN_DECLS
 

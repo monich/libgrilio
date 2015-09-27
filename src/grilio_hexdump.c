@@ -35,7 +35,7 @@
 #include <ctype.h>
 
 #define GLOG_MODULE_NAME GRILIO_HEXDUMP_LOG_MODULE
-#include <glibutil/gutil_log.h>
+#include <gutil_log.h>
 
 /* Log sub-module to turn prefix off */
 GLOG_MODULE_DEFINE2(NULL, GRILIO_LOG_MODULE);

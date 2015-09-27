@@ -36,7 +36,7 @@
 #include "grilio_types.h"
 
 #define GLOG_MODULE_NAME GRILIO_LOG_MODULE
-#include <glibutil/gutil_log.h>
+#include <gutil_log.h>
 
 #endif /* GRILIO_LOG_H */
 
