@@ -128,6 +128,20 @@ grilio_parser_get_utf8(
     return NULL;
 }
 
+char**
+grilio_parser_split_utf8(
+    GRilIoParser* parser,
+    const gchar* delimiter)
+{
+    char** result = NULL;
+    char* str = grilio_parser_get_utf8(parser);
+    if (str) {
+        result = g_strsplit(str, delimiter, -1);
+        g_free(str);
+    }
+    return result;
+}
+
 gboolean
 grilio_parser_skip_string(
     GRilIoParser* parser)

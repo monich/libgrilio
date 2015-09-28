@@ -70,6 +70,11 @@ char*
 grilio_parser_get_utf8(
     GRilIoParser* parser);
 
+char**
+grilio_parser_split_utf8(
+    GRilIoParser* parser,
+    const gchar* delimiter);
+
 gboolean
 grilio_parser_skip_string(
     GRilIoParser* parser);

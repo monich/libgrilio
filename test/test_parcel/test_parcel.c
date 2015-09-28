@@ -120,14 +120,20 @@ test_basic_types()
         }
     }
 
+    /* These don't do anything */
+    grilio_request_append_bytes(req2, NULL, 0);
+    grilio_request_append_bytes(req2, &ret, 0);
+    grilio_request_append_bytes(req2, NULL, 1);
+
     /* All these function shoulf tolerate NULL arguments */
+    grilio_request_set_timeout(NULL, 0);
     grilio_request_unref(NULL);
     grilio_request_append_int32(NULL, 0);
     grilio_request_append_byte(NULL, 0);
     grilio_request_append_bytes(NULL, NULL, 0);
     grilio_request_append_bytes(NULL, &ret, 0);
     grilio_request_append_bytes(NULL, NULL, 1);
-    grilio_request_append_utf8(NULL, 0);
+    grilio_request_append_utf8(NULL, NULL);
     if (grilio_request_ref(NULL) ||
         grilio_request_status(NULL) != GRILIO_REQUEST_INVALID ||
         grilio_request_id(NULL) != 0 ||
@@ -242,6 +248,38 @@ test_strings()
 }
 
 /*==========================================================================*
+ * Split
+ *==========================================================================*/
+
+static
+int
+test_split()
+{
+    int ret = RET_ERR;
+    GRilIoRequest* req = grilio_request_new();
+    GRilIoParser parser;
+    char** out;
+
+    grilio_request_append_utf8(req, "\xD1\x85\xD1\x83\xD0\xB9 123");
+    GVERBOSE("Encoded %u bytes", grilio_request_size(req));
+
+    grilio_parser_init(&parser, grilio_request_data(req),
+        grilio_request_size(req));
+    out = grilio_parser_split_utf8(&parser, " ");
+    if (out &&
+        g_strv_length(out) == 2 &&
+        !grilio_parser_split_utf8(&parser, " ") &&
+        g_utf8_strlen(out[0], -1) == 3 &&
+        strcmp(out[1], "123") == 0) {
+        ret = RET_OK;
+    }
+
+    g_strfreev(out);
+    grilio_request_unref(req);
+    return ret;
+}
+
+/*==========================================================================*
  * Broken
  *==========================================================================*/
 
@@ -323,6 +361,9 @@ static const TestDesc all_tests[] = {
     },{
         "Strings",
         test_strings
+    },{
+        "Split",
+        test_split
     },{
         "Broken",
         test_broken
